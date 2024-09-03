@@ -14,14 +14,14 @@ jobs:
  
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
     - name: Build Wii
       if: ${{ matrix.image == 'Wii' }}
       run: |
-        make -f Makefile.wii -j2
+        make -f Makefile.wii -j1
     
     - name: Copy Wii artifacts
       if: ${{ matrix.image == 'Wii' }}
@@ -37,7 +37,7 @@ jobs:
         cp genplus_wii.dol dist/apps/genplus-gx/boot.dol
 
     - name: Upload Wii artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: ${{ matrix.image == 'Wii' }}
       with: 
         name: Genesis-Plus-GX
@@ -47,7 +47,7 @@ jobs:
     - name: Build GameCube
       if: ${{ matrix.image == 'GameCube' }}
       run: |
-        make -f Makefile.gc -j2
+        make -f Makefile.gc -j1
         
     - name: Copy GameCube artifact
       if: ${{ matrix.image == 'GameCube' }}
@@ -55,7 +55,7 @@ jobs:
         cp genplus_cube.dol dist/
     
     - name: Upload GameCube artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: ${{ matrix.image == 'GameCube' }}
       with: 
         name: Genesis-Plus-GX-GameCube
