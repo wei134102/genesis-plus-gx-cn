@@ -1261,7 +1261,7 @@ static void check_variables(bool first_run)
   bool update_frameskip     = false;
   struct retro_variable var = {0};
 
-  var.key = "genesis_plus_gx_bram";
+  var.key = "genesis_plus_gx_system_bram";
   environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var);
   {
 #if defined(_WIN32)
@@ -1281,6 +1281,25 @@ static void check_variables(bool first_run)
      snprintf(CD_BRAM_EU, sizeof(CD_BRAM_EU), "%s%c%s.brm", save_dir, slash, g_rom_name);
      snprintf(CD_BRAM_US, sizeof(CD_BRAM_US), "%s%c%s.brm", save_dir, slash, g_rom_name);
      snprintf(CD_BRAM_JP, sizeof(CD_BRAM_JP), "%s%c%s.brm", save_dir, slash, g_rom_name);
+   }
+  }
+
+  var.key = "genesis_plus_gx_cart_bram";
+  environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var);
+  {
+#if defined(_WIN32)
+    char slash = '\\';
+#else
+    char slash = '/';
+#endif
+
+   if (!var.value || !strcmp(var.value, "per cart"))
+   {
+     snprintf(CART_BRAM, sizeof(CART_BRAM), "%s%ccart.brm", save_dir, slash);
+   }
+   else
+   {
+     snprintf(CART_BRAM, sizeof(CART_BRAM), "%s%c%s_cart.brm", save_dir, slash, g_rom_name);
    }
   }
 
@@ -1408,6 +1427,87 @@ static void check_variables(bool first_run)
           /* reinitialize VDP timings */
           lines_per_frame = vdp_pal ? 313 : 262;
      
+          /* reinitialize NTSC/PAL mode in VDP status */
+          if (system_hw & SYSTEM_MD)
+          {
+            status = (status & ~1) | vdp_pal;
+          }
+
+          /* reinitialize VC max value */
+          switch (bitmap.viewport.h)
+          {
+            case 192:
+              vc_max = vc_table[0][vdp_pal];
+              break;
+            case 224:
+              vc_max = vc_table[1][vdp_pal];
+              break;
+            case 240:
+              vc_max = vc_table[3][vdp_pal];
+              break;
+          }
+
+          update_viewports = true;
+        }
+
+        update_frameskip = true;
+      }
+    }
+  }
+
+  var.key = "genesis_plus_gx_vdp_mode";
+  environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var);
+  {
+    orig_value = config.vdp_mode;
+    if (var.value && !strcmp(var.value, "60hz"))
+      config.vdp_mode = 1;
+    else if (var.value && !strcmp(var.value, "50hz"))
+      config.vdp_mode = 2;
+    else
+      config.vdp_mode = 0;
+
+    if (orig_value != config.vdp_mode)
+    {
+      if (system_hw)
+      {
+        get_region(NULL);
+
+        if ((system_hw == SYSTEM_MCD) || ((system_hw & SYSTEM_SMS) && config.bios))
+        {
+          /* system with region BIOS should be reinitialized */
+          reinit = true;
+        }
+        else
+        {
+          static const uint16 vc_table[4][2] = 
+          {
+            /* NTSC, PAL */
+            {0xDA , 0xF2},  /* Mode 4 (192 lines) */
+            {0xEA , 0x102}, /* Mode 5 (224 lines) */
+            {0xDA , 0xF2},  /* Mode 4 (192 lines) */
+            {0x106, 0x10A}  /* Mode 5 (240 lines) */
+          };
+
+          /* framerate might have changed, reinitialize audio timings */
+          audio_set_rate(44100, 0);
+
+          /* reinitialize I/O region register */
+          if (system_hw == SYSTEM_MD)
+          {
+            io_reg[0x00] = 0x20 | region_code | (config.bios & 1);
+          }
+          else if (system_hw == SYSTEM_MCD)
+          {
+            io_reg[0x00] = region_code | (config.bios & 1);
+          }
+          else
+          {
+            io_reg[0x00] = 0x80 | (region_code >> 1);
+          }
+
+          /* reinitialize VDP timings */
+          lines_per_frame = vdp_pal ? 313 : 262;
+
           /* reinitialize NTSC/PAL mode in VDP status */
           if (system_hw & SYSTEM_MD)
           {
@@ -2760,7 +2860,7 @@ void retro_set_environment(retro_environment_t cb)
 
    static const struct retro_system_content_info_override content_overrides[] = {
       {
-         "mdx|md|smd|gen|bms|sms|gg|sg|68k|sgd", /* extensions */
+         "mdx|md|bin|smd|gen|bms|sms|gg|sg|68k|sgd", /* extensions */
 #if defined(LOW_MEMORY)
          true,                                   /* need_fullpath */
 #else
@@ -3182,7 +3282,6 @@ bool retro_load_game(const struct retro_game_info *info)
    snprintf(CD_BIOS_EU, sizeof(CD_BIOS_EU), "%s%cbios_CD_E.bin", dir, slash);
    snprintf(CD_BIOS_US, sizeof(CD_BIOS_US), "%s%cbios_CD_U.bin", dir, slash);
    snprintf(CD_BIOS_JP, sizeof(CD_BIOS_JP), "%s%cbios_CD_J.bin", dir, slash);
-   snprintf(CART_BRAM, sizeof(CART_BRAM), "%s%ccart.brm", save_dir, slash);
 
    check_variables(true);
 
@@ -3402,39 +3501,46 @@ size_t retro_get_memory_size(unsigned id)
    {
       case RETRO_MEMORY_SAVE_RAM:
       {
-        if (!sram.on)
-          return 0;
+         /* return 0 if SRAM is disabled */
+         if (!sram.on)
+            return 0;
 
-        /* if emulation is not running, we assume the frontend is requesting SRAM size for loading */
-        if (!is_running)
-        {
-          /* max supported size is returned */
-          return 0x10000;
-        }
-
-        /* otherwise, we assume this is for saving and we need to check if SRAM data has been modified */
-        /* this is obviously not %100 safe since the frontend could still be trying to load SRAM while emulation is running */
-        /* a better solution would be that the frontend itself checks if data has been modified before writing it to a file */
-        for (i=0xffff; i>=0; i--)
-        {
-          if (sram.sram[i] != 0xff)
-          {
-            /* only save modified size */
-            return (i+1);
-          }
-        }
-      }
-      case RETRO_MEMORY_SYSTEM_RAM:
-         if (system_hw == SYSTEM_SG)
-            return 0x00400;
-         else if (system_hw == SYSTEM_SGII)
-            return 0x00800;
-         else if (system_hw == SYSTEM_SGII_RAM_EXT || system_hw == SYSTEM_SMS || system_hw == SYSTEM_SMS2 || system_hw == SYSTEM_GG || system_hw == SYSTEM_GGMS || system_hw == SYSTEM_PBC)
-            return 0x02000;
-         else
+         /* if emulation is not running, we assume the frontend is requesting SRAM size for loading so max supported size is returned */
+         if (!is_running)
             return 0x10000;
-      default:
+
+         /* otherwise, we assume this is for saving and we return the size of SRAM data that has actually been modified */
+         /* this is obviously not %100 safe since the frontend could still be trying to load SRAM while emulation is running */
+         /* a better solution would be that the frontend itself checks if data has been modified before writing it to a file */
+         for (i=0xffff; i>=0; i--)
+            if (sram.sram[i] != 0xff)
+               return (i+1);
+
+         /* return 0 if SRAM is not modified */
          return 0;
+      }
+
+      case RETRO_MEMORY_SYSTEM_RAM:
+      {
+         /* 16-bit hardware */
+         if ((system_hw & SYSTEM_PBC) == SYSTEM_MD)
+            return 0x10000; /* 64KB internal RAM */
+
+         /* get 8-bit cartrige on-board RAM size */
+         i = sms_cart_ram_size();
+
+         if (i > 0)
+            return i + 0x2000; /* on-board RAM size + max 8KB internal RAM */
+         else if (system_hw == SYSTEM_SGII)
+            return 0x0800; /* 2KB internal RAM */
+         else if (system_hw == SYSTEM_SG)
+            return 0x0400; /* 1KB internal RAM */
+         else
+            return 0x2000; /* 8KB internal RAM */
+      }
+
+      default:
+        return 0;
    }
 }
 

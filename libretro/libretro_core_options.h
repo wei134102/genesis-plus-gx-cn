@@ -132,6 +132,21 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       "auto"
    },
    {
+      "genesis_plus_gx_vdp_mode",
+      "Force VDP Mode",
+      NULL,
+      "Overrides the VDP mode to force it to run at either NTSC 60Hz or PAL 50Hz, regardless of system region.",
+      NULL,
+      "system",
+      {
+         { "auto",  "Disabled" },
+         { "60hz",  "NTSC (60Hz)" },
+         { "50hz",  "PAL (50Hz)" },
+         { NULL, NULL },
+      },
+      "auto"
+   },
+   {
       "genesis_plus_gx_bios",
       "System Boot ROM",
       NULL,
@@ -146,7 +161,7 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       "disabled"
    },
    {
-      "genesis_plus_gx_bram",
+      "genesis_plus_gx_system_bram",
       "CD System BRAM",
       NULL,
       "When running Sega CD content, specifies whether to share a single save file between all games from a specific region (Per-BIOS) or to create a separate save file for each game (Per-Game). Note that the Sega CD has limited internal storage, sufficient only for a handful of titles. To avoid running out of space, the 'Per-Game' setting is recommended.",
@@ -158,6 +173,20 @@ struct retro_core_option_v2_definition option_defs_us[] = {
          { NULL, NULL },
       },
       "per bios"
+   },
+   {
+      "genesis_plus_gx_cart_bram",
+      "CD Backup Cart BRAM",
+      NULL,
+      "When running Sega CD content, specifies whether to share a single backup ram cart for all games (Per-Cart) or to create a separate backup ram cart for each game (Per-Game).",
+      NULL,
+      "system",
+      {
+         { "per cart", "Per-Cart" },
+         { "per game", "Per-Game" },
+         { NULL, NULL },
+      },
+      "per cart"
    },
    {
       "genesis_plus_gx_add_on",
@@ -173,7 +202,7 @@ struct retro_core_option_v2_definition option_defs_us[] = {
          { "none",         "None" },
          { NULL, NULL },
       },
-      "disabled"
+      "auto"
    },
    {
       "genesis_plus_gx_lock_on",

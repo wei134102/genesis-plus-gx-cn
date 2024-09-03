@@ -2,7 +2,7 @@
  *  Genesis Plus
  *  CD graphics processor
  *
- *  Copyright (C) 2012-2022  Eke-Eke (Genesis Plus GX)
+ *  Copyright (C) 2012-2024  Eke-Eke (Genesis Plus GX)
  *
  *  Redistribution and use of this code or any derivative works are permitted
  *  provided that the following conditions are met:
@@ -41,9 +41,12 @@
 /*          WORD-RAM DMA interfaces (1M & 2M modes)            */
 /***************************************************************/
 
-void word_ram_0_dma_w(unsigned int words)
+void word_ram_0_dma_w(unsigned int length)
 {
   uint16 data;
+
+  /* 16-bit DMA only */
+  unsigned int words = length >> 1;
 
   /* CDC buffer source address */
   uint16 src_index = cdc.dac.w & 0x3ffe;
@@ -74,9 +77,12 @@ void word_ram_0_dma_w(unsigned int words)
   }
 }
 
-void word_ram_1_dma_w(unsigned int words)
+void word_ram_1_dma_w(unsigned int length)
 {
   uint16 data;
+
+  /* 16-bit DMA only */
+  unsigned int words = length >> 1;
 
   /* CDC buffer source address */
   uint16 src_index = cdc.dac.w & 0x3ffe;
@@ -107,9 +113,12 @@ void word_ram_1_dma_w(unsigned int words)
   }
 }
 
-void word_ram_2M_dma_w(unsigned int words)
+void word_ram_2M_dma_w(unsigned int length)
 {
   uint16 data;
+
+  /* 16-bit DMA only */
+  unsigned int words = length >> 1;
 
   /* CDC buffer source address */
   uint16 src_index = cdc.dac.w & 0x3ffe;
@@ -446,9 +455,11 @@ int gfx_context_load(uint8 *state)
   load_param(&gfx.bufferStart, sizeof(gfx.bufferStart));
 
   load_param(&tmp32, 4);
+  tmp32 &= 0x3fff8;
   gfx.tracePtr = (uint16 *)(scd.word_ram_2M + tmp32);
 
   load_param(&tmp32, 4);
+  tmp32 &= ~((1 << ((2*gfx.mapShift) + 1)) - 1) & 0x3ffff;
   gfx.mapPtr = (uint16 *)(scd.word_ram_2M + tmp32);
 
   return bufferptr;
@@ -470,6 +481,12 @@ INLINE void gfx_render(uint32 bufferIndex, uint32 width)
   /* pixel map offset values for current line (5.11 format) */
   uint32 xoffset = (int16) *gfx.tracePtr++;
   uint32 yoffset = (int16) *gfx.tracePtr++;
+
+  /* handle trace vector address overflow */
+  if (gfx.tracePtr == (uint16 *)(scd.word_ram_2M + 0x40000))
+  {
+    gfx.tracePtr = (uint16 *)(scd.word_ram_2M);
+  }
 
   /* process all dots */
   while (width--)
@@ -548,7 +565,7 @@ INLINE void gfx_render(uint32 bufferIndex, uint32 width)
     }
 
     /* read out paired pixel data */
-    pixel_in = READ_BYTE(scd.word_ram_2M, bufferIndex >> 1);
+    pixel_in = READ_BYTE(scd.word_ram_2M, (bufferIndex >> 1) & 0x3ffff);
 
     /* update left or rigth pixel */
     if (bufferIndex & 1)
@@ -564,7 +581,7 @@ INLINE void gfx_render(uint32 bufferIndex, uint32 width)
     pixel_out = gfx.lut_prio[(scd.regs[0x02>>1].w >> 3) & 0x03][pixel_in][pixel_out];
 
     /* write data to image buffer */
-    WRITE_BYTE(scd.word_ram_2M, bufferIndex >> 1, pixel_out);
+    WRITE_BYTE(scd.word_ram_2M, (bufferIndex >> 1) & 0x3ffff, pixel_out);
 
     /* check current pixel position  */
     if ((bufferIndex & 7) != 7)
@@ -648,7 +665,7 @@ void gfx_start(unsigned int base, int cycles)
   /* reference: https://github.com/MiSTer-devel/MegaCD_MiSTer/blob/master/docs/mcd%20logs/graphics_operations_and_68k_wordram_access.jpg */
   /* TODO: figure what happen exactly when pixel offset is different from 0 */
   /*       for the moment, one additional read-modify-write access is assumed at the start if pixel offset is not aligned to 4 pixels */
-  gfx.cyclesPerLine = 4 * 3 * (4 + 2 * scd.regs[0x62>>1].w + ((scd.regs[0x62>>1].w + (scd.regs[0x60>>1].byte.l & 0x03) + 3) >> 2));
+  gfx.cyclesPerLine = 4 * 3 * (4 + 2 * (scd.regs[0x62>>1].w & 0x1ff) + (((scd.regs[0x62>>1].w & 0x1ff) + (scd.regs[0x60>>1].byte.l & 0x03) + 3) >> 2));
 
   /* start graphics operation */
   scd.regs[0x58>>1].byte.h = 0x80;
@@ -674,7 +691,7 @@ void gfx_update(int cycles)
         /* update Vdot remaining size */
         scd.regs[0x64>>1].byte.l -= lines;
 
-        /* increment cycle counter */
+        /* update cycle counter */
         gfx.cycles += lines * gfx.cyclesPerLine;
       }
       else
@@ -685,14 +702,20 @@ void gfx_update(int cycles)
         /* clear Vdot remaining size */
         scd.regs[0x64>>1].byte.l = 0;
 
+        /* update cycle counter */
+        gfx.cycles += lines * gfx.cyclesPerLine;
+
         /* end of graphics operation */
         scd.regs[0x58>>1].byte.h = 0;
    
         /* SUB-CPU idle on register $58 polling ? */
         if (s68k.stopped & (1<<0x08))
         {
-          /* sync SUB-CPU with GFX chip */
-          s68k.cycles = scd.cycles;
+          /* sync SUB-CPU with GFX chip (only if not already ahead) */
+          if (s68k.cycles < gfx.cycles)
+          {
+            s68k.cycles = gfx.cycles;
+          }
 
           /* restart SUB-CPU */
           s68k.stopped = 0;
@@ -716,7 +739,7 @@ void gfx_update(int cycles)
       while (lines--)
       {
         /* process dots to image buffer */
-        gfx_render(gfx.bufferStart, scd.regs[0x62>>1].w);
+        gfx_render(gfx.bufferStart, scd.regs[0x62>>1].w & 0x1ff);
 
         /* increment image buffer start index for next line (8 pixels/line) */
         gfx.bufferStart += 8;
