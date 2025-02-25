@@ -33,3 +33,5 @@ You can also test latest compiled builds for Gamecube / Wii and Retroarch (Windo
 ----
 
 [![btn_donate_LG.gif](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=2966212) If you like this project and want to show your appreciation, Paypal donations are always welcomed.
+
+20250225测试代码
