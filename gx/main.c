@@ -58,6 +58,14 @@
 extern void USBStorage_Deinitialize();
 #endif
 
+#include <stdio.h>
+#include <time.h> // 假设 gettime 函数在这个头文件中
+
+unsigned long long gettime() {
+    // 这里是 gettime 函数的定义
+    return (unsigned long long)time(NULL);
+}
+
 u32 Shutdown = 0;
 u32 ConfigRequested = 1;
 
