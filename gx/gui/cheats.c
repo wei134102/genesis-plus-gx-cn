@@ -1458,7 +1458,7 @@ void CheatLoad(void)
       {
         /* copy cheat code */
         strncpy(cheatlist[maxcheats].code, temp, len);
-        cheatlist[maxcheats].code[len] = 0;
+        cheatlist[maxcheats].code[len] = '\0';
         len++;
 
         /* jump TAB and SPACE characters */
