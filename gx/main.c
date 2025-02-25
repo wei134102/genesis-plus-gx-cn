@@ -67,6 +67,7 @@ u32 ConfigRequested = 1;
  ***************************************************************************/
 static void PowerOff_cb(void)
 {
+  printf("PowerOff_cb called at %llu\n", gettime());
   Shutdown = 1;
   ConfigRequested = 1;
   reload = 0;
@@ -74,6 +75,7 @@ static void PowerOff_cb(void)
 
 static void Reload_cb(void)
 {
+  printf("Reload_cb called at %llu\n", gettime());
   Shutdown = 1;
   ConfigRequested = 1;
 }
