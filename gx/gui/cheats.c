@@ -1458,7 +1458,7 @@ void CheatLoad(void)
       {
         /* copy cheat code */
         strncpy(cheatlist[maxcheats].code, temp, len);
-        cheatlist[maxcheats].code[len] = '\0';
+        cheatlist[maxcheats].code[len] = '\0'; // 确保字符串以空字符结尾
         len++;
 
         /* jump TAB and SPACE characters */
@@ -1467,7 +1467,7 @@ void CheatLoad(void)
 
         /* copy cheat description */
         strncpy(cheatlist[maxcheats].text, &temp[len], MAX_DESC_LENGTH - 1);
-        cheatlist[maxcheats].text[MAX_DESC_LENGTH - 1] = 0;
+        cheatlist[maxcheats].text[MAX_DESC_LENGTH - 1] = '\0'; // 确保字符串以空字符结尾
 
         /* increment cheat count */
         maxcheats++;
