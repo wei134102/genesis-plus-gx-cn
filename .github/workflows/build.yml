@@ -34,8 +34,8 @@ jobs:
         touch dist/genplus-gx/cheats/cheatsdir
         touch dist/genplus-gx/saves/savesdir
         cp hbc/* dist/apps/genplus-gx/
-        cp genplus_wii.elf genplus_wii.dol dist/apps/genplus-gx/
-
+        cp genplus_wii.dol dist/apps/genplus-gx/boot.dol
+        cp genplus_wii.elf dist/apps/genplus-gx/boot.elf
     - name: Upload Wii artifacts
       uses: actions/upload-artifact@v4
       if: ${{ matrix.image == 'Wii' }}
