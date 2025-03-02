@@ -43,7 +43,7 @@ jobs:
         name: Genesis-Plus-GX
         path: |
           dist/apps/genplus-gx/*.dol
-          dist/apps/genplus-gx/*.elf  # 确保包含ELF
+          dist/apps/genplus-gx/*.elf
     
     - name: Build GameCube
       if: ${{ matrix.image == 'GameCube' }}
